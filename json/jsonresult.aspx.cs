@@ -289,6 +289,14 @@ public partial class json_jsonresult : System.Web.UI.Page
                 case "checktable": // check the table number
                     Response.Write(jsonCheckTable(GetUrlValue("tablenumber")));
                     break;
+
+                case "itemstatusbyphone": // get item status by phone number
+                    Response.Write(JsonItemStatusByPhone(GetUrlValue("method"), GetUrlValue("phonenumber")));
+                    break;
+
+                case "orderstatusbyphone": // get item status by phone number
+                    Response.Write(JsonOrderStatusByPhone(GetUrlValue("phonenumber")));
+                    break;
             }
         }
         //*************************************************************************************
@@ -504,19 +512,11 @@ public partial class json_jsonresult : System.Web.UI.Page
                     foreach (DataRow row in dt.Rows)
                     {
                         //    //********* get all order number and merge on current table ********************
-                        //NameValueCollection nanValO = new NameValueCollection();
-                        //DataTable dtO = new DataTable();
-                        //nanValO.Add("_mode", "finalizeorder");
-                        //string table = row["TableNumber"].ToString();
-                        //nanValO.Add("_id", row["TableNumber"].ToString());
-                        //dtO = objCommon.getDataTable(nanValO, "spPOS_General");
+                       
                         string orderNumber = "";
                         Int32 count = 0;
 
-                        //foreach (DataRow rowO in dtO.Rows)
-                        //{
-                        //if (rowO["TableNumber"].ToString() == "0")
-                        //{
+                       
                         orderNumber = row["OrderNumber"].ToString() + ",";
                         string strName = "No Details";
 
@@ -526,14 +526,9 @@ public partial class json_jsonresult : System.Web.UI.Page
                         if (strName == "(null)")
                             strName = "No Details";
 
-                        result += "{\"OrderNumber\":\"" + orderNumber.Remove(orderNumber.Length - 1, 1) + "\",\"Type\":\"" + row["OrderType"].ToString() + "\",\"TableNumber\":\"" + row["TableNumber"].ToString() + "\",\"Date\":\"" + Convert.ToDateTime(row["OrderDate"]).ToShortDateString() + "\",\"WaitingTime\":\"" + row["WaitingTime"].ToString() + "\",\"NoOfGues\":\"" + row["NumberOfGuest"].ToString() + "\",\"CustomerDetails\":\"" + strName + "\",\"Status\":\"N\"}" + ",";
+                        result += "{\"OrderNumber\":\"" + orderNumber.Remove(orderNumber.Length - 1, 1) + "\",\"Type\":\"" + row["OrderType"].ToString() + "\",\"TableNumber\":\"" + row["TableNumber"].ToString() + "\",\"Date\":\"" + Convert.ToDateTime(row["OrderDate"]).ToShortDateString() + "\",\"WaitingTime\":\"" + row["WaitingTime"].ToString() + "\",\"NoOfGues\":\"" + row["NumberOfGuest"].ToString() + "\",\"CustomerDetails\":\"" + strName + "\",\"Status\":\"" + row["IsPaid"].ToString() + "\"}" + ",";
                         count++;
-                        //}
-                        //else
-                        //{
-                        //   orderNumber += rowO["OrderNumber"].ToString() + ",";
-                        //}
-                        //}
+                        
 
                         //******************************************************************************
                         if (count == 0)
@@ -546,7 +541,7 @@ public partial class json_jsonresult : System.Web.UI.Page
                             if (strName1 == "(null)")
                                 strName1 = "No Details";
 
-                            result += "{\"OrderNumber\":\"" + orderNumber.Remove(orderNumber.Length - 1, 1) + "\",\"Type\":\"" + row["OrderType"].ToString() + "\",\"TableNumber\":\"" + row["TableNumber"].ToString() + "\",\"Date\":\"" + Convert.ToDateTime(row["OrderDate"]).ToShortDateString() + "\",\"WaitingTime\":\"" + row["WaitingTime"].ToString() + "\",\"NoOfGues\":\"" + row["NumberOfGuest"].ToString() + "\",\"CustomerDetails\":\"" + strName1 + "\",\"Status\":\"N\"}" + ",";
+                            result += "{\"OrderNumber\":\"" + orderNumber.Remove(orderNumber.Length - 1, 1) + "\",\"Type\":\"" + row["OrderType"].ToString() + "\",\"TableNumber\":\"" + row["TableNumber"].ToString() + "\",\"Date\":\"" + Convert.ToDateTime(row["OrderDate"]).ToShortDateString() + "\",\"WaitingTime\":\"" + row["WaitingTime"].ToString() + "\",\"NoOfGues\":\"" + row["NumberOfGuest"].ToString() + "\",\"CustomerDetails\":\"" + strName1 + "\",\"Status\":\"" + row["IsPaid"].ToString() + "\"}" + ",";
                         }
                         strJsonRe = "{\"" + requestMethod + "\":[" + result.Remove(result.Length - 1, 1) + "]}";
 
@@ -3959,5 +3954,106 @@ Your recent purchase-plese save it for reference;</td>
 
     #endregion
 
+    #region METHOD GET ITEMS FOR ITEMS STATUS ON PHONE NUMBER BASIS
+
+    // function to get item status on phone number basis
+    private string JsonItemStatusByPhone(string requestMethod, string phonenumber)
+    {
+        string strJsonFinal = "";
+        if (!string.IsNullOrEmpty(requestMethod))
+        {
+            NameValueCollection namOrder = new NameValueCollection();
+            DataTable dtOrder = new DataTable();
+            namOrder.Add("@mode", "getfinalorders");
+            namOrder.Add("@phone", phonenumber);
+            dtOrder = objCommon.getDataTable(namOrder, "spPOS_GeneralByPhone");
+
+            if (dtOrder.Rows.Count > 0)
+            {
+                foreach (DataRow orderRow in dtOrder.Rows)
+                {
+
+                    List<ItemsStatus> list = new List<ItemsStatus>();
+                    DataTable dt = new DataTable();
+                    NameValueCollection nam = new NameValueCollection();
+                    nam.Add("_mode", "itemstatus");
+                    nam.Add("_id", orderRow["OrderNumber"].ToString());
+                    dt = objCommon.getDataTable(nam, "spPOS_General");
+                    list = (from DataRow row in dt.Rows
+                            select new ItemsStatus
+                            {
+                                ItemId = row["Id"].ToString(),
+                                ItemName = row["ItemName"].ToString(),
+                                ItemStatus = row["ItemStatus"].ToString(),
+
+                            }).ToList();
+
+                    System.Web.Script.Serialization.JavaScriptSerializer oSerializer = new System.Web.Script.Serialization.JavaScriptSerializer();
+
+                    string strJsonRe = oSerializer.Serialize(list);
+
+                    strJsonRe = strJsonRe.Remove(0, 1);
+                    strJsonFinal += "[[" + strJsonRe.Remove(strJsonRe.Length - 1, 1) + "]," + "{\"OrderNumber\":\"" + orderRow["OrderNumber"].ToString() + "\"}]" + ",";
+                }
+
+                strJsonFinal = "{\"" + requestMethod + "\":[" + strJsonFinal.Remove(strJsonFinal.Length - 1, 1) + "]}";
+            }
+            else
+                strJsonFinal = "{\"Error\":\"No record on this table number!\"}";
+
+            return strJsonFinal;
+        }
+        else
+            return "";
+    }
+
+    #endregion
+
+    #region GET ORDER STATUS BY PHONE NUMBER
+    // function to get order status on particular table number
+    protected string JsonOrderStatusByPhone(string phonenumber)
+    {
+        string jsonResult = "";
+        try
+        {
+            NameValueCollection nam = new NameValueCollection();
+            nam.Add("@mode", "tableorderstatus");
+            nam.Add("@phone", phonenumber);
+            DataTable dt = new DataTable();
+            dt = objCommon.getDataTable(nam, "spPOS_GeneralByPhone");
+            if (dt.Rows.Count > 0)
+            {
+                foreach (DataRow row in dt.Rows)
+                {
+                    string strStatus = "SEND";
+                    switch (row["WaitingTime"].ToString())
+                    {
+                        case "-1":
+                            strStatus = "SAVE";
+                            break;
+                        case "-2":
+                            strStatus = "FINAL";
+                            break;
+                    }
+
+                    jsonResult += "{\"OrderNo\":\"" + row["OrderNumber"].ToString() + "\",\"Status\":\"" + strStatus + "\"}" + ",";
+
+                }
+
+
+                jsonResult = jsonResult.Remove(jsonResult.Length - 1, 1);
+                jsonResult = "{\"orderstatusontable\":[" + jsonResult + "]}";
+            }
+            else
+                jsonResult = "{\"Error\":\"No record on this phone number!\"}";
+        }
+        catch (Exception ex)
+        {
+            jsonResult = "{\"Error\":\"Some error please try again!\"}";
+        }
+        return jsonResult;
+    }
+
+    #endregion
 
 }
